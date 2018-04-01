@@ -27,7 +27,6 @@ extern "C" {
 #include <vector>
 #include <boost/context/all.hpp>
 
-namespace ctx=boost::context;
 
 /** 
  * Open a TCP socket on port \port and call:
@@ -50,7 +49,7 @@ int epollpp_listen(int listen_fd,
                    F closed_connection_handler, // void(int fd)
                    G data_handler); // void(int fd, const char* data, int data_size)
 
-namespace impl
+namespace epollpp_impl
 {
   static int create_and_bind(const char *port)
   {
@@ -105,7 +104,7 @@ int epollpp_listen(const char* service,
                    G closed_connection_handler,
                    H data_handler)
 {
-  return epollpp_listen(impl::create_and_bind(service),
+  return epollpp_listen(epollpp_impl::create_and_bind(service),
                         new_connection_handler, closed_connection_handler, data_handler);
 }
 
@@ -115,6 +114,8 @@ int epollpp_listen(int listen_fd,
                     G closed_connection_handler,
                     H data_handler)
 {
+  namespace ctx = boost::context;
+
   if (listen_fd < 0) return -1;
   const int max_connections = 1000;
   int ret;
