@@ -1,0 +1,26 @@
+# epollpp
+
+epollpp is a minimalist single header only C++ linux epoll wrapper.
+
+## TCP echo example
+
+```c++
+#include "epollpp.hh"
+
+int main()
+{
+    const char* port = "1234";
+    epollpp_listen(1234,
+         [] (int fd) { printf("new connection: %i\n", fd); },
+         [] (int fd) { printf("lost connection: %i\n", fd); },
+         [] (int fd, auto read, auto write) {
+           char buf[1024];
+           int received;
+           
+           while (received = read(buf, sizeof(buf)))
+             write(buf, received);
+         }
+         );
+    });
+}
+```
