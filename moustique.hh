@@ -1,9 +1,9 @@
 /**
- * @file   epollpp.hh
+ * @file   moustique.hh
  * @author Matthieu Garrigues <matthieu.garrigues@gmail.com> <matthieu.garrigues@gmail.com>
  * @date   Sat Mar 31 23:52:51 2018
  * 
- * @brief  epollpp wrapper.
+ * @brief  moustique wrapper.
  * 
  * 
  */
@@ -39,17 +39,17 @@ extern "C" {
  * @return -1 on error, 0 on success.
  */
 template <typename G, typename H>
-int epollpp_listen(const char* port,
+int moustique_listen(const char* port,
                    G closed_connection_handler,
                    H data_handler);
 
 // Same as above but take an already opened socket \listen_fd.
 template <typename G, typename H>
-int epollpp_listen(int listen_fd,
+int moustique_listen(int listen_fd,
                    G closed_connection_handler,
                    H data_handler);
 
-namespace epollpp_impl
+namespace moustique_impl
 {
   static int create_and_bind(const char *port)
   {
@@ -99,18 +99,18 @@ namespace epollpp_impl
 }
 
 template <typename G, typename H>
-int epollpp_listen(const char* service,
-                   G closed_connection_handler,
-                   H data_handler)
+int moustique_listen(const char* service,
+                     G closed_connection_handler,
+                     H data_handler)
 {
-  return epollpp_listen(epollpp_impl::create_and_bind(service),
-                        closed_connection_handler, data_handler);
+  return moustique_listen(moustique_impl::create_and_bind(service),
+                          closed_connection_handler, data_handler);
 }
 
 template <typename G, typename H>
-int epollpp_listen(int listen_fd,
-                   G closed_connection_handler,
-                   H data_handler)
+int moustique_listen(int listen_fd,
+                     G closed_connection_handler,
+                     H data_handler)
 {
   namespace ctx = boost::context;
 
@@ -120,19 +120,19 @@ int epollpp_listen(int listen_fd,
   int flags = fcntl (listen_fd, F_GETFL, 0);
   if (-1 == (ret = fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK)))
   {
-    fprintf(stderr, "fcntl failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+    fprintf(stderr, "fcntl failed at %s:%i  error is: %s", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
     return -1;
   }
   if (-1 == (ret = ::listen(listen_fd, SOMAXCONN)))
   {
-    fprintf(stderr, "listen failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+    fprintf(stderr, "listen failed at %s:%i  error is: %s", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
     return -1;
   }
 
   int epoll_fd = epoll_create1(0);
   if (epoll_fd == -1)
   {
-    fprintf(stderr, "epoll_create1 failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+    fprintf(stderr, "epoll_create1 failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
     return -1;
   }
 
@@ -142,7 +142,7 @@ int epollpp_listen(int listen_fd,
   ret = epoll_ctl (epoll_fd, EPOLL_CTL_ADD, listen_fd, &event);
   if (-1 == ret)
   {
-    fprintf(stderr, "epoll_ctl failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+    fprintf(stderr, "epoll_ctl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
     return -1;
   }
 
@@ -187,7 +187,7 @@ int epollpp_listen(int listen_fd,
 
           if (-1 == (ret = fcntl (infd, F_SETFL, fcntl(infd, F_GETFL, 0) | O_NONBLOCK)))
           {
-            fprintf(stderr, "fcntl failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+            fprintf(stderr, "fcntl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
             return -1;
           }
 
@@ -196,7 +196,7 @@ int epollpp_listen(int listen_fd,
           ret = epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
           if (ret == -1)
           {
-            fprintf(stderr, "epoll_ctl failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
+            fprintf(stderr, "epoll_ctl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
             return -1;
           }
 
