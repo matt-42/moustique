@@ -32,20 +32,18 @@ extern "C" {
  * Open a TCP socket on port \port and call:
  *   - new_connection_handler(int client_fd) whenever a new client is connected on the server.
  *   - closed_connection_handler(int client_fd) whenever a client connection is lost.
- *   - data_handler(int client_fd, const char* data, int data_size) whenever some data is available.
+ *   - data_handler(int client_fd, auto read, auto write)
  *
  * @return -1 on error, 0 on success.
  */
-template <typename F, typename G, typename H>
+template <typename G, typename H>
 int epollpp_listen(const char* port,
-                   F new_connection_handler,
                    G closed_connection_handler,
                    H data_handler);
 
 // Same as above but take an already opened socket \listen_fd.
-template <typename F, typename G, typename H>
+template <typename G, typename H>
 int epollpp_listen(int listen_fd,
-                   F new_connection_handler, // void(int fd)
                    G closed_connection_handler, // void(int fd)
                    H data_handler); // void(int fd, const char* data, int data_size)
 
@@ -98,21 +96,19 @@ namespace epollpp_impl
 
 }
 
-template <typename F, typename G, typename H>
+template <typename G, typename H>
 int epollpp_listen(const char* service,
-                   F new_connection_handler,
                    G closed_connection_handler,
                    H data_handler)
 {
   return epollpp_listen(epollpp_impl::create_and_bind(service),
-                        new_connection_handler, closed_connection_handler, data_handler);
+                        closed_connection_handler, data_handler);
 }
 
-template <typename F, typename G, typename H>
+template <typename G, typename H>
 int epollpp_listen(int listen_fd,
-                    F new_connection_handler,
-                    G closed_connection_handler,
-                    H data_handler)
+                   G closed_connection_handler,
+                   H data_handler)
 {
   namespace ctx = boost::context;
 
@@ -201,7 +197,6 @@ int epollpp_listen(int listen_fd,
             fprintf(stderr, "epoll_ctl failed at %s:%s  error is: ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
             return -1;
           }
-          new_connection_handler(infd);
 
           if (fibers.size() < infd + 1)
             fibers.resize(infd + 1);

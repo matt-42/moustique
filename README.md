@@ -15,9 +15,9 @@ int main()
 {
     const char* port = "1234";
     epollpp_listen(port,
-         [] (int fd) { printf("new connection: %i\n", fd); },
          [] (int fd) { printf("lost connection: %i\n", fd); },
          [] (int fd, auto read, auto write) {
+           printf("new connection: %i\n", fd);
            char buf[1024];
            int received;
            
