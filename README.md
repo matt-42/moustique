@@ -17,8 +17,8 @@ int main()
            char buf[1024];
            int received;
            
-           while (received = read(buf, sizeof(buf)))
-             write(buf, received);
+           while (received = read(buf, sizeof(buf))) // Yield until data reach the socket.
+             write(buf, received); // Yield until the socket is ready for a new data write.
          }
          );
     });
