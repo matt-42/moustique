@@ -29,10 +29,12 @@ extern "C" {
 
 
 /** 
- * Open a TCP socket on port \port and call:
- *   - new_connection_handler(int client_fd) whenever a new client is connected on the server.
- *   - closed_connection_handler(int client_fd) whenever a client connection is lost.
- *   - data_handler(int client_fd, auto read, auto write)
+ * Open a TCP socket on port \port and
+ *   - call closed_connection_handler(int client_fd) whenever a client connection is lost.
+ *   - call data_handler(int client_fd, auto read, auto write) to handle the connection.
+ *          this handle can call the following blocking io calls:
+ *               - nread = read(buf, max_size)
+ *               - write(buf, buf_size) 
  *
  * @return -1 on error, 0 on success.
  */
@@ -44,8 +46,8 @@ int epollpp_listen(const char* port,
 // Same as above but take an already opened socket \listen_fd.
 template <typename G, typename H>
 int epollpp_listen(int listen_fd,
-                   G closed_connection_handler, // void(int fd)
-                   H data_handler); // void(int fd, const char* data, int data_size)
+                   G closed_connection_handler,
+                   H data_handler);)
 
 namespace epollpp_impl
 {
