@@ -31,9 +31,11 @@ int main()
 }
 ```
 
-### Comparison with boost::asio TCP echo example
+### Comparison with boost::asio TCP echo example [1]
 
-    - 6x less code to write.
-    - 3.5x faster compilation (2.61s vs 0.75s).
-    - 6.25x smaller binary size (20Kb vs 125Kb).
+    - 5.5x less code to write.
+    - 7.5x faster compilation (6.1s vs 0.8s).
+    - 24x smaller binary size (20Kb vs 475Kb).
     - Same performances.
+
+[1] https://www.boost.org/doc/libs/1_65_1/doc/html/boost_asio/example/cpp11/spawn/echo_server.cpp
