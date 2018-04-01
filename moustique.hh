@@ -115,7 +115,6 @@ int moustique_listen(int listen_fd,
   namespace ctx = boost::context;
 
   if (listen_fd < 0) return -1;
-  const int max_connections = 1000;
   int ret;
   int flags = fcntl (listen_fd, F_GETFL, 0);
   if (-1 == (ret = fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK)))
@@ -200,11 +199,11 @@ int moustique_listen(int listen_fd,
             return -1;
           }
 
-          if (fibers.size() < infd + 1)
+          if (int(fibers.size()) < infd + 1)
             fibers.resize(infd + 1);
 
           struct end_of_file {};
-          fibers[infd] = ctx::callcc([fd=infd, &fibers,&data_handler,
+          fibers[infd] = ctx::callcc([fd=infd, &data_handler,
                                       closed_connection_handler,epoll_fd]
                                      (ctx::continuation&& sink) mutable {
               auto read = [&] (char* buf, int max_size) {
