@@ -1,6 +1,6 @@
 # Moustique
 
-Moustique provide a coroutine-based interface to non-blocking/asyncronous read write operation
+Moustique (~200 LOC) provides a coroutine-based interface to non-blocking/asyncronous read write operation
 on linux sockets.
 
 Dependency: boost::context (-lboost_context), C++14.
