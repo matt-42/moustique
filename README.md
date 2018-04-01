@@ -21,7 +21,7 @@ int main()
            char buf[1024];
            int received;
            
-           while (received = read(buf, sizeof(buf))) // Yield until data reach the socket.
+           while (received = read(buf, sizeof(buf))) // Yield until sizeof(buf) new bytes get read from the socket.
              write(buf, received); // Yield until the socket is ready for a new data write.
          }
          );
