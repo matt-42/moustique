@@ -26,7 +26,6 @@ int main()
 
              write(buf, received); // Yield until the socket is ready for a new data write.
          }
-         );
-    });
+    );
 }
 ```
