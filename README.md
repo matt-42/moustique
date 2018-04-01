@@ -14,7 +14,7 @@ Licence: MIT.
 int main()
 {
     const char* port = "1234";
-    epollpp_listen(1234,
+    epollpp_listen(port,
          [] (int fd) { printf("new connection: %i\n", fd); },
          [] (int fd) { printf("lost connection: %i\n", fd); },
          [] (int fd, auto read, auto write) {
