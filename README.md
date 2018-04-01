@@ -2,7 +2,9 @@
 
 epollpp is a minimalist single header only C++ linux epoll wrapper.
 
-Dependency: boost::context, c++14.
+Dependency: boost::context, C++14.
+
+Licence: MIT.
 
 ## TCP echo example
 
