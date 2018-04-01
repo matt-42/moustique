@@ -46,8 +46,8 @@ int epollpp_listen(const char* port,
 template <typename F, typename G, typename H>
 int epollpp_listen(int listen_fd,
                    F new_connection_handler, // void(int fd)
-                   F closed_connection_handler, // void(int fd)
-                   G data_handler); // void(int fd, const char* data, int data_size)
+                   G closed_connection_handler, // void(int fd)
+                   H data_handler); // void(int fd, const char* data, int data_size)
 
 namespace epollpp_impl
 {
