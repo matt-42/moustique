@@ -151,7 +151,7 @@ int moustique_listen(int listen_fd,
 
   std::vector<ctx::continuation> fibers;
 
-  // Even loop.
+  // Event loop.
   while (true)
   {
     int n_events = epoll_wait (epoll_fd, events, MAXEVENTS, -1);
