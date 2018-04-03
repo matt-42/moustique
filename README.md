@@ -1,7 +1,7 @@
 # Moustique
 
 Moustique is a tiny C++14 library (~180 LOC) providing an easy to use
-interface to non-blocking IO on linux sockets.
+interface to non-blocking network IO on linux.
 
 
 # Implementation details
@@ -27,7 +27,7 @@ int main()
 {
     moustique_listen(1234, // Port number
                      SOCK_STREAM, // TCP socket
-                     2, // threads
+                     2, // number of threads
          [] (int fd, auto read, auto write) {
 
            printf("new connection: %i\n", fd);
