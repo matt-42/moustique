@@ -9,8 +9,6 @@
  */
 #pragma once
 
-extern "C" {
-  
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,47 +20,59 @@ extern "C" {
 #include <sys/epoll.h>
 #include <errno.h>
 
-}
-
+#include <thread>
 #include <vector>
 #include <boost/context/all.hpp>
 
-
 /** 
- * Open a TCP socket on port \port and
- *   - call closed_connection_handler(int client_fd) whenever a client connection is lost.
- *   - call data_handler(int client_fd, auto read, auto write) to handle the connection.
- *          this handle can call the following io calls:
- *               - nread = read(buf, max_size)
- *               - write(buf, buf_size) 
+ * Open a socket on port \port and call \conn_handler(int client_fd, auto read, auto write) 
+ * to process each incomming connection. This handle takes 3 argments:
+ *               - int client_fd: the file descriptor of the socket.
+ *               - int read(buf, max_size_to_read):  
+ *                       The callback that conn_handler can use to read on the socket.
+ *                       If data is available, copy it into \buf, otherwise suspend the handler until
+ *                       there is something to read.
+ *                       Returns the number of char actually read, returns 0 if the connection has been lost.
+ *               - bool write(buf, buf_size): return true on success, false on error.
+ *                       The callback that conn_handler can use to write on the socket.
+ *                       If the socket is ready to write, write \buf, otherwise suspend the handler until
+ *                       it is ready.
+ *                       Returns true on sucess, false if connection is lost.
  *
- * @return -1 on error, 0 on success.
+ * @param port  The server port.
+ * @param socktype The socket type, SOCK_STREAM for TCP, SOCK_DGRAM for UDP.
+ * @param nthreads Number of threads.
+ * @param conn_handler The connection handler
+ * @return false on error, true on success.
  */
-template <typename G, typename H>
-int moustique_listen(const char* port,
-                   G closed_connection_handler,
-                   H data_handler);
+template <typename H>
+int moustique_listen(int port,
+                     int socktype,
+                     int nthreads,
+                     H conn_handler);
 
 // Same as above but take an already opened socket \listen_fd.
-template <typename G, typename H>
-int moustique_listen(int listen_fd,
-                   G closed_connection_handler,
-                   H data_handler);
+template <typename H>
+int moustique_listen_fd(int listen_fd,
+                        int nthreads,
+                        H conn_handler);
 
 namespace moustique_impl
 {
-  static int create_and_bind(const char *port)
+  static int create_and_bind(int port, int socktype)
   {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
     int s, sfd;
 
+    char port_str[20];
+    snprintf(port_str, sizeof(port_str), "%d", port);
     memset (&hints, 0, sizeof (struct addrinfo));
     hints.ai_family = AF_UNSPEC;     /* Return IPv4 and IPv6 choices */
-    hints.ai_socktype = SOCK_STREAM; /* We want a TCP socket */
+    hints.ai_socktype = socktype; /* We want a TCP socket */
     hints.ai_flags = AI_PASSIVE;     /* All interfaces */
 
-    s = getaddrinfo (NULL, port, &hints, &result);
+    s = getaddrinfo (NULL, port_str, &hints, &result);
     if (s != 0)
     {
       fprintf (stderr, "getaddrinfo: %s\n", gai_strerror (s));
@@ -98,172 +108,147 @@ namespace moustique_impl
 
 }
 
-template <typename G, typename H>
-int moustique_listen(const char* service,
-                     G closed_connection_handler,
-                     H data_handler)
+#define MOUSTIQUE_CHECK_CALL(CALL)                                      \
+  {                                                                     \
+    int ret = CALL;                                                     \
+    if (-1 == ret)                                                      \
+    {                                                                   \
+      fprintf(stderr, "Error at %s:%i  error is: %s", __PRETTY_FUNCTION__, __LINE__, strerror(ret)); \
+      return false;                                                     \
+    }                                                                   \
+  }
+
+template <typename H>
+int moustique_listen(int port,
+                     int socktype,
+                     int nthreads,
+                     H conn_handler)
 {
-  return moustique_listen(moustique_impl::create_and_bind(service),
-                          closed_connection_handler, data_handler);
+  return moustique_listen_fd(moustique_impl::create_and_bind(port, socktype), nthreads, conn_handler);
 }
 
-template <typename G, typename H>
-int moustique_listen(int listen_fd,
-                     G closed_connection_handler,
-                     H data_handler)
+template <typename H>
+int moustique_listen_fd(int listen_fd,
+                        int nthreads,
+                        H conn_handler)
 {
   namespace ctx = boost::context;
 
-  if (listen_fd < 0) return -1;
-  int ret;
+  if (listen_fd < 0) return 0;
   int flags = fcntl (listen_fd, F_GETFL, 0);
-  if (-1 == (ret = fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK)))
-  {
-    fprintf(stderr, "fcntl failed at %s:%i  error is: %s", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-    return -1;
-  }
-  if (-1 == (ret = ::listen(listen_fd, SOMAXCONN)))
-  {
-    fprintf(stderr, "listen failed at %s:%i  error is: %s", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-    return -1;
-  }
+  MOUSTIQUE_CHECK_CALL(fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK));
+  MOUSTIQUE_CHECK_CALL(::listen(listen_fd, SOMAXCONN));
 
-  int epoll_fd = epoll_create1(0);
-  if (epoll_fd == -1)
-  {
-    fprintf(stderr, "epoll_create1 failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-    return -1;
-  }
+  auto event_loop_fn = [listen_fd, conn_handler] {
 
-  epoll_event event;
-  event.data.fd = listen_fd;
-  event.events = EPOLLIN | EPOLLET;
-  ret = epoll_ctl (epoll_fd, EPOLL_CTL_ADD, listen_fd, &event);
-  if (-1 == ret)
-  {
-    fprintf(stderr, "epoll_ctl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-    return -1;
-  }
+    int epoll_fd = epoll_create1(0);
 
-  const int MAXEVENTS = 64;
-
-  epoll_event* events = (epoll_event*) calloc(MAXEVENTS, sizeof event);
-
-  std::vector<ctx::continuation> fibers;
-
-  // Event loop.
-  while (true)
-  {
-    int n_events = epoll_wait (epoll_fd, events, MAXEVENTS, -1);
-    for (int i = 0; i < n_events; i++)
+    auto epoll_ctl = [epoll_fd] (int fd, uint32_t flags)
     {
-      if ((events[i].events & EPOLLERR) ||
-          (events[i].events & EPOLLHUP) ||
-          (!(events[i].events & EPOLLIN)))
+      epoll_event event;
+      event.data.fd = fd;
+      event.events = flags;
+      MOUSTIQUE_CHECK_CALL(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event));
+      return 1;
+    };
+    
+    epoll_ctl(listen_fd, EPOLLIN | EPOLLET);
+
+    const int MAXEVENTS = 64;
+    std::vector<ctx::continuation> fibers;
+
+    // Event loop.
+    epoll_event events[MAXEVENTS];
+    while (true)
+    {
+      int n_events = epoll_wait (epoll_fd, events, MAXEVENTS, -1);
+      for (int i = 0; i < n_events; i++)
       {
-        close (events[i].data.fd);
-        closed_connection_handler(events[i].data.fd);
-        
-        continue;
-      }
-      else if (listen_fd == events[i].data.fd) // New connection.
-      {
-        while(true)
+        if ((events[i].events & EPOLLERR) ||
+            (events[i].events & EPOLLHUP))
         {
-          struct sockaddr in_addr;
-          socklen_t in_len;
-          int infd;
-          char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-
-          in_len = sizeof in_addr;
-          infd = accept (listen_fd, &in_addr, &in_len);
-          if (infd == -1)
-            break;
-          ret = getnameinfo (&in_addr, in_len,
-                             hbuf, sizeof(hbuf),
-                             sbuf, sizeof(sbuf),
-                             NI_NUMERICHOST | NI_NUMERICSERV);
-
-          if (-1 == (ret = fcntl (infd, F_SETFL, fcntl(infd, F_GETFL, 0) | O_NONBLOCK)))
+          close (events[i].data.fd);
+          fibers[events[i].data.fd] = fibers[events[i].data.fd].resume();
+          continue;
+        }
+        else if (listen_fd == events[i].data.fd) // New connection.
+        {
+          while(true)
           {
-            fprintf(stderr, "fcntl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-            return -1;
-          }
+            struct sockaddr in_addr;
+            socklen_t in_len;
+            int infd;
+            char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
 
-          event.data.fd = infd;
-          event.events = EPOLLIN | EPOLLET;
-          ret = epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
-          if (ret == -1)
-          {
-            fprintf(stderr, "epoll_ctl failed at %s:%i  error is %s ", __PRETTY_FUNCTION__, __LINE__, strerror(ret));
-            return -1;
-          }
+            in_len = sizeof in_addr;
+            infd = accept (listen_fd, &in_addr, &in_len);
+            if (infd == -1)
+              break;
+            getnameinfo (&in_addr, in_len,
+                         hbuf, sizeof(hbuf),
+                         sbuf, sizeof(sbuf),
+                         NI_NUMERICHOST | NI_NUMERICSERV);
 
-          if (int(fibers.size()) < infd + 1)
-            fibers.resize(infd + 1);
+            MOUSTIQUE_CHECK_CALL(fcntl(infd, F_SETFL, fcntl(infd, F_GETFL, 0) | O_NONBLOCK));
 
-          struct end_of_file {};
-          fibers[infd] = ctx::callcc([fd=infd, &data_handler,
-                                      closed_connection_handler,epoll_fd]
-                                     (ctx::continuation&& sink) mutable {
-              auto read = [&] (char* buf, int max_size) {
+            epoll_ctl(infd, EPOLLIN | EPOLLOUT | EPOLLET);
 
-                ssize_t count = ::read(fd, buf, max_size);
-                while (count <= 0)
-                {
-                  epoll_event event;
-                  event.data.fd = fd;
-                  event.events = EPOLLIN | EPOLLET;
-                  epoll_ctl (epoll_fd, EPOLL_CTL_MOD, fd, &event);
-                  sink = sink.resume();
-                  count = ::read(fd, buf, max_size);
-                  if ((count < 0 and errno != EAGAIN) or count == 0)
-                    throw end_of_file();
-                }
-                return count;
-              };
+            if (int(fibers.size()) < infd + 1)
+              fibers.resize(infd + 10);
 
-              auto write = [&] (const char* buf, int size) {
-                const char* end = buf + size;
-                ssize_t count = ::write(fd, buf, end - buf);
-                if (count > 0) buf += count;
-                while (buf != end)
-                {
-                  epoll_event event;
-                  event.data.fd = fd;
-                  event.events = EPOLLOUT | EPOLLET;
-                  epoll_ctl (epoll_fd, EPOLL_CTL_MOD, fd, &event);
-                  sink = sink.resume();
-                  count = ::write(fd, buf, end - buf);
-                  if (count > 0) buf += count;
-                  if ((count < 0 and errno != EAGAIN) or count == 0)
-                    throw end_of_file();
-                }
-              };
+            struct end_of_file {};
+            fibers[infd] = ctx::callcc([fd=infd, &conn_handler]
+                                       (ctx::continuation&& sink) {
+                                         auto read = [fd, &sink] (char* buf, int max_size) {
+                                           ssize_t count = ::read(fd, buf, max_size);
+                                           while (count <= 0)
+                                           {
+                                             if ((count < 0 and errno != EAGAIN) or count == 0)
+                                               return ssize_t(0);
+                                             sink = sink.resume();
+                                             count = ::read(fd, buf, max_size);
+                                           }
+                                           return count;
+                                         };
+
+                                         auto write = [fd, &sink] (const char* buf, int size) {
+                                           const char* end = buf + size;
+                                           ssize_t count = ::write(fd, buf, end - buf);
+                                           if (count > 0) buf += count;
+                                           while (buf != end)
+                                           {
+                                             if ((count < 0 and errno != EAGAIN) or count == 0)
+                                               return false;
+                                             sink = sink.resume();
+                                             count = ::write(fd, buf, end - buf);
+                                             if (count > 0) buf += count;
+                                           }
+                                           return true;
+                                         };
               
-              try {
-                data_handler(fd, read, write);
-              }
-              catch (end_of_file)
-              {
-                close(fd);
-                closed_connection_handler(fd);                
-              }
-              return std::move(sink);
-            });
+                                         conn_handler(fd, read, write);
+                                         close(fd);
+                                         return std::move(sink);
+                                       });
+          
+          }
           
         }
+        else // Data available on existing sockets. Wake up the fiber associated with events[i].data.fd.
+          fibers[events[i].data.fd] = fibers[events[i].data.fd].resume();
       }
-      else // Data available on existing sockets.
-      {
-        fibers[events[i].data.fd] = fibers[events[i].data.fd].resume();
-      }
-
     }
-  }
+    
+  };
 
-  free(events);
+  std::vector<std::thread> ths;
+  for (int i = 0; i < nthreads; i++)
+    ths.push_back(std::thread([&] { event_loop_fn(); }));
+
+  for (auto& t : ths)
+    t.join();
+
   close(listen_fd);
 
-  return 0;
+  return true;
 }
