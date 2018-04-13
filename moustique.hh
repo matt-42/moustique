@@ -196,7 +196,6 @@ int moustique_listen_fd(int listen_fd,
             if (int(fibers.size()) < infd + 1)
               fibers.resize(infd + 10);
 
-            struct end_of_file {};
             fibers[infd] = ctx::callcc([fd=infd, &conn_handler]
                                        (ctx::continuation&& sink) {
                                          auto read = [fd, &sink] (char* buf, int max_size) {
