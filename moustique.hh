@@ -85,6 +85,13 @@ namespace moustique_impl
       if (sfd == -1)
         continue;
 
+      int enable = 1;
+      if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+      {
+        close(sfd);
+        continue;
+      }
+
       s = bind (sfd, rp->ai_addr, rp->ai_addrlen);
       if (s == 0)
       {
