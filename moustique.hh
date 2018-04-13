@@ -143,13 +143,13 @@ int moustique_listen_fd(int listen_fd,
 
     int epoll_fd = epoll_create1(0);
 
-    auto epoll_ctl = [epoll_fd] (int fd, uint32_t flags)
+    auto epoll_ctl = [epoll_fd] (int fd, uint32_t flags) -> bool
     {
       epoll_event event;
       event.data.fd = fd;
       event.events = flags;
       MOUSTIQUE_CHECK_CALL(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event));
-      return 1;
+      return true;
     };
     
     epoll_ctl(listen_fd, EPOLLIN | EPOLLET);
