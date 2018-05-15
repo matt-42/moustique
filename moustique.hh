@@ -174,7 +174,6 @@ int moustique_listen_fd(int listen_fd,
         if ((events[i].events & EPOLLERR) ||
             (events[i].events & EPOLLHUP))
         {
-          close (events[i].data.fd);
           fibers[events[i].data.fd] = fibers[events[i].data.fd].resume();
           continue;
         }
