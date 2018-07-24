@@ -102,13 +102,13 @@ namespace moustique_impl
       close (sfd);
     }
 
+    freeaddrinfo (result);
+    
     if (rp == NULL)
     {
       fprintf (stderr, "Could not bind\n");
       return -1;
     }
-
-    freeaddrinfo (result);
 
     return sfd;
   }
